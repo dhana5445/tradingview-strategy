@@ -1,0 +1,1704 @@
+//@version=6
+strategy("V19.1 - Universal Forex Confirmed Structure Engine",
+     overlay=true,
+     initial_capital=10000,
+     pyramiding=0,
+     process_orders_on_close=true,
+     calc_on_every_tick=false,
+     calc_on_order_fills=true,
+     max_labels_count=500,
+     max_lines_count=100)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// V19.1
+// MARKET DIRECTION FIRST → ENTRY SECOND
+//
+// BULL = confirmed HH + HL structure
+// BEAR = confirmed LH + LL structure
+// TRANSITION = possible reversal / incomplete structure
+// RANGE = neutral structure + neutral HTF/EMA environment
+//
+// FVG / OB / liquidity / patterns NEVER override market direction.
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 1. MASTER SETTINGS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupMaster = "01 • Master"
+
+useEMA          = input.bool(true,  "Use EMA Filter", group=groupMaster)
+useHTF          = input.bool(true,  "Use HTF Filter", group=groupMaster)
+useLiquidity    = input.bool(true,  "Use Liquidity", group=groupMaster)
+useMSSBOS       = input.bool(true,  "Use MSS / BOS", group=groupMaster)
+useDisplacement = input.bool(true,  "Use Displacement", group=groupMaster)
+useFVG          = input.bool(true,  "Use FVG", group=groupMaster)
+useOB           = input.bool(true,  "Use Order Block", group=groupMaster)
+useOTE          = input.bool(true,  "Use OTE", group=groupMaster)
+usePD           = input.bool(true,  "Use Premium / Discount", group=groupMaster)
+usePatterns     = input.bool(true,  "Use Hidden Patterns", group=groupMaster)
+useRange        = input.bool(true,  "Use Range Engine", group=groupMaster)
+useV18          = input.bool(true,  "Use V18 FVG Retest Engine", group=groupMaster)
+useSession      = input.bool(false, "Use Session Filter", group=groupMaster)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 2. EMA
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupEMA = "02 • EMA"
+
+emaFastLen = input.int(50,  "Fast EMA", minval=1, group=groupEMA)
+emaSlowLen = input.int(200, "Slow EMA", minval=1, group=groupEMA)
+
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+
+emaBullEnvironment =
+     emaFast > emaSlow and
+     close > emaFast
+
+emaBearEnvironment =
+     emaFast < emaSlow and
+     close < emaFast
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 3. HTF — PREVIOUS CLOSED HTF CANDLE ONLY
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupHTF = "03 • HTF"
+
+htfTf = input.timeframe("60", "Higher Timeframe", group=groupHTF)
+
+htfClose =
+     request.security(
+         syminfo.tickerid,
+         htfTf,
+         close[1],
+         lookahead=barmerge.lookahead_on)
+
+htfEMA50 =
+     request.security(
+         syminfo.tickerid,
+         htfTf,
+         ta.ema(close, emaFastLen)[1],
+         lookahead=barmerge.lookahead_on)
+
+htfEMA200 =
+     request.security(
+         syminfo.tickerid,
+         htfTf,
+         ta.ema(close, emaSlowLen)[1],
+         lookahead=barmerge.lookahead_on)
+
+htfBull =
+     htfEMA50 > htfEMA200 and
+     htfClose > htfEMA50
+
+htfBear =
+     htfEMA50 < htfEMA200 and
+     htfClose < htfEMA50
+
+htfNeutral =
+     not htfBull and not htfBear
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 4. ATR
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupATR = "04 • ATR"
+
+atrLen = input.int(14, "ATR Length", minval=1, group=groupATR)
+atr = ta.atr(atrLen)
+
+safeATR = math.max(atr, syminfo.mintick)
+
+body = math.abs(close - open)
+candleRange = high - low
+
+bullCandle =
+     close > open
+
+bearCandle =
+     close < open
+
+bullRejection =
+     bullCandle and
+     candleRange > 0 and
+     close >= low + candleRange * 0.65
+
+bearRejection =
+     bearCandle and
+     candleRange > 0 and
+     close <= high - candleRange * 0.65
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 5. CONFIRMED SWING STRUCTURE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupStructure = "05 • Confirmed Structure"
+
+pivotLen = input.int(3, "Confirmed Pivot Length", minval=1, group=groupStructure)
+
+ph = ta.pivothigh(high, pivotLen, pivotLen)
+pl = ta.pivotlow(low, pivotLen, pivotLen)
+
+var float lastHigh = na
+var float previousHigh = na
+var int   lastHighBar = na
+var int   previousHighBar = na
+var int   lastHighType = 0
+// 1 = HH
+// -1 = LH
+
+var float lastLow = na
+var float previousLow = na
+var int   lastLowBar = na
+var int   previousLowBar = na
+var int   lastLowType = 0
+// 1 = HL
+// -1 = LL
+
+newHighPivot = not na(ph)
+newLowPivot  = not na(pl)
+
+if newHighPivot
+    previousHigh := lastHigh
+    previousHighBar := lastHighBar
+
+    lastHigh := ph
+    lastHighBar := bar_index - pivotLen
+
+    if not na(previousHigh)
+        lastHighType := ph > previousHigh ? 1 : -1
+    else
+        lastHighType := 0
+
+if newLowPivot
+    previousLow := lastLow
+    previousLowBar := lastLowBar
+
+    lastLow := pl
+    lastLowBar := bar_index - pivotLen
+
+    if not na(previousLow)
+        lastLowType := pl > previousLow ? 1 : -1
+    else
+        lastLowType := 0
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 6. STRUCTURAL SEQUENCE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// We require BOTH sides of structure.
+//
+// Bull:
+// latest confirmed high = HH
+// latest confirmed low  = HL
+//
+// Bear:
+// latest confirmed high = LH
+// latest confirmed low  = LL
+
+confirmedBullStructure =
+     lastHighType == 1 and
+     lastLowType == 1
+
+confirmedBearStructure =
+     lastHighType == -1 and
+     lastLowType == -1
+
+structureNeutral =
+     not confirmedBullStructure and
+     not confirmedBearStructure
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 7. STRUCTURAL BREAK EVENTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+bullBreak =
+     not na(lastHigh) and
+     close > lastHigh and
+     close[1] <= lastHigh
+
+bearBreak =
+     not na(lastLow) and
+     close < lastLow and
+     close[1] >= lastLow
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 8. STRUCTURE STATE MACHINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+REG_UNKNOWN     = 0
+REG_BULL        = 1
+REG_BEAR        = -1
+REG_RANGE       = 2
+REG_TRANSITION  = 3
+
+var int marketRegime = REG_UNKNOWN
+
+// Initial establishment
+if confirmedBullStructure and not confirmedBearStructure
+    marketRegime := REG_BULL
+
+if confirmedBearStructure and not confirmedBullStructure
+    marketRegime := REG_BEAR
+
+// Existing bullish structure gets invalidated only by breaking
+// the confirmed structural low.
+if marketRegime == REG_BULL
+    if not na(lastLow) and close < lastLow
+        marketRegime := REG_TRANSITION
+
+// Existing bearish structure gets invalidated only by breaking
+// the confirmed structural high.
+if marketRegime == REG_BEAR
+    if not na(lastHigh) and close > lastHigh
+        marketRegime := REG_TRANSITION
+
+// During transition, wait for the opposite structure to actually
+// become confirmed.
+if marketRegime == REG_TRANSITION
+    if confirmedBullStructure and close >= lastLow
+        marketRegime := REG_BULL
+
+    if confirmedBearStructure and close <= lastHigh
+        marketRegime := REG_BEAR
+
+// Neutral environment can become range.
+if structureNeutral and htfNeutral
+    if emaFast <= emaSlow * 1.002 and emaFast >= emaSlow * 0.998
+        marketRegime := REG_RANGE
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 9. HARD MARKET DIRECTION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+structureBullNow =
+     marketRegime == REG_BULL and
+     confirmedBullStructure
+
+structureBearNow =
+     marketRegime == REG_BEAR and
+     confirmedBearStructure
+
+// Price must not have broken the opposite structural side.
+bullStructureSafe =
+     structureBullNow and
+     (na(lastLow) or close >= lastLow)
+
+bearStructureSafe =
+     structureBearNow and
+     (na(lastHigh) or close <= lastHigh)
+
+// HTF is a HARD FILTER when enabled.
+bullHTFAllowed =
+     not useHTF or htfBull
+
+bearHTFAllowed =
+     not useHTF or htfBear
+
+// EMA is a HARD FILTER when enabled.
+bullEMAAllowed =
+     not useEMA or emaBullEnvironment
+
+bearEMAAllowed =
+     not useEMA or emaBearEnvironment
+
+// FINAL DIRECTION GATE.
+//
+// Nothing below this point can create a direction that violates
+// these conditions.
+
+bullDirection =
+     bullStructureSafe and
+     bullHTFAllowed and
+     bullEMAAllowed
+
+bearDirection =
+     bearStructureSafe and
+     bearHTFAllowed and
+     bearEMAAllowed
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 10. LIQUIDITY
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupLiquidity = "06 • Liquidity"
+
+eqToleranceATR = input.float(0.15, "Equal High/Low ATR Tolerance", minval=0.01, step=0.01, group=groupLiquidity)
+liquidityLookback = input.int(50, "Liquidity Lookback", minval=5, group=groupLiquidity)
+
+rangeLiquidityHigh =
+     ta.highest(high[1], liquidityLookback)
+
+rangeLiquidityLow =
+     ta.lowest(low[1], liquidityLookback)
+
+equalHigh =
+     not na(previousHigh) and
+     not na(lastHigh) and
+     math.abs(lastHigh - previousHigh) <= safeATR * eqToleranceATR
+
+equalLow =
+     not na(previousLow) and
+     not na(lastLow) and
+     math.abs(lastLow - previousLow) <= safeATR * eqToleranceATR
+
+sweepSwingHigh =
+     not na(lastHigh) and
+     high > lastHigh and
+     close < lastHigh
+
+sweepSwingLow =
+     not na(lastLow) and
+     low < lastLow and
+     close > lastLow
+
+sweepEQH =
+     equalHigh and
+     high > math.max(lastHigh, previousHigh) and
+     close < math.max(lastHigh, previousHigh)
+
+sweepEQL =
+     equalLow and
+     low < math.min(lastLow, previousLow) and
+     close > math.min(lastLow, previousLow)
+
+sweepRangeHigh =
+     high > rangeLiquidityHigh and
+     close < rangeLiquidityHigh
+
+sweepRangeLow =
+     low < rangeLiquidityLow and
+     close > rangeLiquidityLow
+
+bullLiquiditySweep =
+     sweepSwingLow or
+     sweepEQL or
+     sweepRangeLow
+
+bearLiquiditySweep =
+     sweepSwingHigh or
+     sweepEQH or
+     sweepRangeHigh
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 11. DISPLACEMENT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupDisp = "07 • Displacement"
+
+dispATR = input.float(1.0, "Displacement Body ATR", minval=0.1, step=0.1, group=groupDisp)
+
+bullDisplacement =
+     bullCandle and
+     body >= safeATR * dispATR
+
+bearDisplacement =
+     bearCandle and
+     body >= safeATR * dispATR
+
+bullBreakDisplacement =
+     bullDisplacement and
+     high > ta.highest(high[1], 5)
+
+bearBreakDisplacement =
+     bearDisplacement and
+     low < ta.lowest(low[1], 5)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 12. MSS / BOS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// BOS = continuation.
+// MSS = break against previous structure.
+//
+// They are CONFLUENCE only.
+// They never change bullDirection/bearDirection by themselves.
+
+bullBOS =
+     bullBreak and
+     confirmedBullStructure
+
+bearBOS =
+     bearBreak and
+     confirmedBearStructure
+
+bullMSS =
+     marketRegime == REG_TRANSITION and
+     bullBreak
+
+bearMSS =
+     marketRegime == REG_TRANSITION and
+     bearBreak
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 13. FVG ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupFVG = "08 • FVG"
+
+maxFVGSetupBars = input.int(15, "FVG Life", minval=1, group=groupFVG)
+fvgInvalidationATR = input.float(0.10, "FVG Invalidation ATR", minval=0.01, step=0.01, group=groupFVG)
+
+var float bullFVGTop = na
+var float bullFVGBottom = na
+var int bullFVGBar = na
+var bool bullFVGValid = false
+
+var float bearFVGTop = na
+var float bearFVGBottom = na
+var int bearFVGBar = na
+var bool bearFVGValid = false
+
+newBullFVG =
+     low > high[2]
+
+newBearFVG =
+     high < low[2]
+
+if newBullFVG
+    bullFVGTop := low
+    bullFVGBottom := high[2]
+    bullFVGBar := bar_index
+    bullFVGValid := true
+
+if newBearFVG
+    bearFVGTop := low[2]
+    bearFVGBottom := high
+    bearFVGBar := bar_index
+    bearFVGValid := true
+
+if bullFVGValid and not na(bullFVGBar)
+    if bar_index - bullFVGBar > maxFVGSetupBars
+        bullFVGValid := false
+
+    if close < bullFVGBottom - safeATR * fvgInvalidationATR
+        bullFVGValid := false
+
+if bearFVGValid and not na(bearFVGBar)
+    if bar_index - bearFVGBar > maxFVGSetupBars
+        bearFVGValid := false
+
+    if close > bearFVGTop + safeATR * fvgInvalidationATR
+        bearFVGValid := false
+
+bullFVGTouch =
+     bullFVGValid and
+     not na(bullFVGTop) and
+     not na(bullFVGBottom) and
+     low <= bullFVGTop and
+     high >= bullFVGBottom
+
+bearFVGTouch =
+     bearFVGValid and
+     not na(bearFVGTop) and
+     not na(bearFVGBottom) and
+     high >= bearFVGBottom and
+     low <= bearFVGTop
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 14. ORDER BLOCK ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupOB = "09 • Order Block"
+
+var float bullOBHigh = na
+var float bullOBLow = na
+var int bullOBBar = na
+var bool bullOBValid = false
+
+var float bearOBHigh = na
+var float bearOBLow = na
+var int bearOBBar = na
+var bool bearOBValid = false
+
+// Bullish OB = previous bearish candle before bullish displacement.
+if bullDisplacement and close > high[1] and close[1] < open[1]
+    bullOBHigh := high[1]
+    bullOBLow := low[1]
+    bullOBBar := bar_index - 1
+    bullOBValid := true
+
+// Bearish OB = previous bullish candle before bearish displacement.
+if bearDisplacement and close < low[1] and close[1] > open[1]
+    bearOBHigh := high[1]
+    bearOBLow := low[1]
+    bearOBBar := bar_index - 1
+    bearOBValid := true
+
+if bullOBValid and not na(bullOBBar)
+    if bar_index - bullOBBar > maxFVGSetupBars
+        bullOBValid := false
+
+    if close < bullOBLow
+        bullOBValid := false
+
+if bearOBValid and not na(bearOBBar)
+    if bar_index - bearOBBar > maxFVGSetupBars
+        bearOBValid := false
+
+    if close > bearOBHigh
+        bearOBValid := false
+
+bullOBTouch =
+     bullOBValid and
+     low <= bullOBHigh and
+     high >= bullOBLow
+
+bearOBTouch =
+     bearOBValid and
+     high >= bearOBLow and
+     low <= bearOBHigh
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 15. PREMIUM / DISCOUNT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+haveStructureRange =
+     not na(lastHigh) and
+     not na(lastLow) and
+     lastHigh > lastLow
+
+structureEquilibrium =
+     haveStructureRange ?
+     (lastHigh + lastLow) / 2.0 :
+     na
+
+discountZone =
+     haveStructureRange and
+     close < structureEquilibrium
+
+premiumZone =
+     haveStructureRange and
+     close > structureEquilibrium
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 16. OTE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupOTE = "10 • OTE"
+
+ote62 = input.float(0.62, "OTE 62%", minval=0.1, maxval=0.95, step=0.01, group=groupOTE)
+ote79 = input.float(0.79, "OTE 79%", minval=0.1, maxval=0.95, step=0.01, group=groupOTE)
+
+bullOTE =
+     haveStructureRange and
+     close >= lastHigh - (lastHigh - lastLow) * ote79 and
+     close <= lastHigh - (lastHigh - lastLow) * ote62
+
+bearOTE =
+     haveStructureRange and
+     close <= lastLow + (lastHigh - lastLow) * ote79 and
+     close >= lastLow + (lastHigh - lastLow) * ote62
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 17. HIDDEN PATTERN ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupPattern = "11 • Hidden Patterns"
+
+patternPivotLen = input.int(3, "Pattern Pivot Length", minval=2, group=groupPattern)
+patternToleranceATR = input.float(0.35, "Pattern Tolerance ATR", minval=0.05, step=0.05, group=groupPattern)
+
+pPH = ta.pivothigh(high, patternPivotLen, patternPivotLen)
+pPL = ta.pivotlow(low, patternPivotLen, patternPivotLen)
+
+var float pH0 = na
+var float pH1 = na
+var float pH2 = na
+var float pH3 = na
+
+var float pL0 = na
+var float pL1 = na
+var float pL2 = na
+var float pL3 = na
+
+if not na(pPH)
+    pH3 := pH2
+    pH2 := pH1
+    pH1 := pH0
+    pH0 := pPH
+
+if not na(pPL)
+    pL3 := pL2
+    pL2 := pL1
+    pL1 := pL0
+    pL0 := pPL
+
+tol = safeATR * patternToleranceATR
+
+// Double / triple tops
+doubleTop =
+     not na(pH0) and
+     not na(pH1) and
+     math.abs(pH0 - pH1) <= tol
+
+tripleTop =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pH2) and
+     math.abs(pH0 - pH1) <= tol and
+     math.abs(pH1 - pH2) <= tol
+
+// Double / triple bottoms
+doubleBottom =
+     not na(pL0) and
+     not na(pL1) and
+     math.abs(pL0 - pL1) <= tol
+
+tripleBottom =
+     not na(pL0) and
+     not na(pL1) and
+     not na(pL2) and
+     math.abs(pL0 - pL1) <= tol and
+     math.abs(pL1 - pL2) <= tol
+
+// Head and shoulders
+headShoulders =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pH2) and
+     pH1 > pH0 and
+     pH1 > pH2 and
+     math.abs(pH0 - pH2) <= tol
+
+inverseHeadShoulders =
+     not na(pL0) and
+     not na(pL1) and
+     not na(pL2) and
+     pL1 < pL0 and
+     pL1 < pL2 and
+     math.abs(pL0 - pL2) <= tol
+
+// Ascending triangle
+ascendingTriangle =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pL0) and
+     not na(pL1) and
+     math.abs(pH0 - pH1) <= tol and
+     pL0 > pL1
+
+// Descending triangle
+descendingTriangle =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pL0) and
+     not na(pL1) and
+     math.abs(pL0 - pL1) <= tol and
+     pH0 < pH1
+
+// Symmetrical triangle
+symmetricalTriangle =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pL0) and
+     not na(pL1) and
+     pH0 < pH1 and
+     pL0 > pL1
+
+// Bull flag
+bullFlag =
+     confirmedBullStructure and
+     close < high[5] and
+     close > emaSlow and
+     ta.rising(emaFast, 3)
+
+// Bear flag
+bearFlag =
+     confirmedBearStructure and
+     close > low[5] and
+     close < emaSlow and
+     ta.falling(emaFast, 3)
+
+// Rising wedge
+risingWedge =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pL0) and
+     not na(pL1) and
+     pH0 > pH1 and
+     pL0 > pL1 and
+     (pH0 - pH1) < (pL0 - pL1)
+
+// Falling wedge
+fallingWedge =
+     not na(pH0) and
+     not na(pH1) and
+     not na(pL0) and
+     not na(pL1) and
+     pH0 < pH1 and
+     pL0 < pL1 and
+     (pH1 - pH0) < (pL0 - pL1)
+
+// Cup / handle approximations
+cupHandle =
+     not na(pL2) and
+     not na(pL1) and
+     not na(pL0) and
+     pL1 < pL2 and
+     pL1 < pL0 and
+     close < math.max(pH0, pH1)
+
+inverseCupHandle =
+     not na(pH2) and
+     not na(pH1) and
+     not na(pH0) and
+     pH1 > pH2 and
+     pH1 > pH0 and
+     close > math.min(pL0, pL1)
+
+// Bullish / bearish pattern groups.
+//
+// Patterns are NEVER allowed to create direction.
+bullPattern =
+     inverseHeadShoulders or
+     doubleBottom or
+     tripleBottom or
+     ascendingTriangle or
+     fallingWedge or
+     bullFlag or
+     cupHandle
+
+bearPattern =
+     headShoulders or
+     doubleTop or
+     tripleTop or
+     descendingTriangle or
+     risingWedge or
+     bearFlag or
+     inverseCupHandle
+
+patternConfluenceBull =
+     usePatterns and bullPattern
+
+patternConfluenceBear =
+     usePatterns and bearPattern
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 18. RANGE ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupRange = "12 • Range"
+
+rangeLookback = input.int(40, "Range Lookback", minval=10, group=groupRange)
+rangeEdgePct = input.float(20, "Range Edge %", minval=5, maxval=45, step=1, group=groupRange)
+rangeATRMax = input.float(4.0, "Maximum Range Size / ATR", minval=0.5, step=0.5, group=groupRange)
+
+rangeHigh =
+     ta.highest(high[1], rangeLookback)
+
+rangeLow =
+     ta.lowest(low[1], rangeLookback)
+
+rangeSize =
+     rangeHigh - rangeLow
+
+rangeCenter =
+     (rangeHigh + rangeLow) / 2.0
+
+rangeValid =
+     not na(rangeHigh) and
+     not na(rangeLow) and
+     rangeSize > safeATR and
+     rangeSize <= safeATR * rangeATRMax
+
+emaNeutral =
+     math.abs(emaFast - emaSlow) <= safeATR * 0.75
+
+genuineRange =
+     useRange and
+     marketRegime == REG_RANGE and
+     structureNeutral and
+     htfNeutral and
+     emaNeutral and
+     rangeValid
+
+rangeBottomZone =
+     rangeValid and
+     close <= rangeLow + rangeSize * rangeEdgePct / 100.0
+
+rangeTopZone =
+     rangeValid and
+     close >= rangeHigh - rangeSize * rangeEdgePct / 100.0
+
+rangeLongSignal =
+     genuineRange and
+     rangeBottomZone and
+     bullRejection
+
+rangeShortSignal =
+     genuineRange and
+     rangeTopZone and
+     bearRejection
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 19. V18 FVG RETEST ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupV18 = "13 • V18 FVG Retest"
+
+v18RequireDisplacement = input.bool(true, "Require V18 Displacement", group=groupV18)
+v18RequireRejection = input.bool(false, "Require V18 Rejection", group=groupV18)
+
+var bool v18BullSetup = false
+var bool v18BearSetup = false
+
+var int v18BullSetupBar = na
+var int v18BearSetupBar = na
+
+var float v18BullSweepLow = na
+var float v18BearSweepHigh = na
+
+var float v18BullFVGTop = na
+var float v18BullFVGBottom = na
+var float v18BearFVGTop = na
+var float v18BearFVGBottom = na
+
+var int v18BullFVGBar = na
+var int v18BearFVGBar = na
+
+// Sweep starts the actual V18 setup.
+if bullLiquiditySweep and bullDirection
+    v18BullSetup := true
+    v18BullSetupBar := bar_index
+    v18BullSweepLow := low
+
+if bearLiquiditySweep and bearDirection
+    v18BearSetup := true
+    v18BearSetupBar := bar_index
+    v18BearSweepHigh := high
+
+// Setup expiration.
+if v18BullSetup and not na(v18BullSetupBar)
+    if bar_index - v18BullSetupBar > maxFVGSetupBars
+        v18BullSetup := false
+
+if v18BearSetup and not na(v18BearSetupBar)
+    if bar_index - v18BearSetupBar > maxFVGSetupBars
+        v18BearSetup := false
+
+// V18 FVG must be created AFTER the setup.
+v18NewBullFVG =
+     v18BullSetup and
+     newBullFVG and
+     (not v18RequireDisplacement or bullDisplacement)
+
+v18NewBearFVG =
+     v18BearSetup and
+     newBearFVG and
+     (not v18RequireDisplacement or bearDisplacement)
+
+if v18NewBullFVG
+    v18BullFVGTop := low
+    v18BullFVGBottom := high[2]
+    v18BullFVGBar := bar_index
+
+if v18NewBearFVG
+    v18BearFVGTop := low[2]
+    v18BearFVGBottom := high
+    v18BearFVGBar := bar_index
+
+v18BullRetest =
+     v18BullSetup and
+     not na(v18BullFVGBar) and
+     bar_index > v18BullFVGBar and
+     low <= v18BullFVGTop and
+     high >= v18BullFVGBottom and
+     (not v18RequireRejection or bullRejection)
+
+v18BearRetest =
+     v18BearSetup and
+     not na(v18BearFVGBar) and
+     bar_index > v18BearFVGBar and
+     high >= v18BearFVGBottom and
+     low <= v18BearFVGTop and
+     (not v18RequireRejection or bearRejection)
+
+v18BullSignal =
+     useV18 and
+     bullDirection and
+     v18BullRetest
+
+v18BearSignal =
+     useV18 and
+     bearDirection and
+     v18BearRetest
+
+if v18BullSignal
+    v18BullSetup := false
+
+if v18BearSignal
+    v18BearSetup := false
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 20. LOCATION CONFLUENCE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+bullLocation =
+     (useFVG and bullFVGTouch) or
+     (useOB and bullOBTouch) or
+     (useOTE and bullOTE) or
+     (usePD and discountZone)
+
+bearLocation =
+     (useFVG and bearFVGTouch) or
+     (useOB and bearOBTouch) or
+     (useOTE and bearOTE) or
+     (usePD and premiumZone)
+
+noLocationFilters =
+     not useFVG and
+     not useOB and
+     not useOTE and
+     not usePD
+
+bullLocationAllowed =
+     bullLocation or noLocationFilters
+
+bearLocationAllowed =
+     bearLocation or noLocationFilters
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 21. CONFLUENCE SCORE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupScore = "14 • Confluence"
+
+minimumScore = input.int(5, "Minimum Confluence Score", minval=1, maxval=20, group=groupScore)
+
+int longScore = 0
+int shortScore = 0
+
+if htfBull
+    longScore += 2
+
+if htfBear
+    shortScore += 2
+
+if emaBullEnvironment
+    longScore += 1
+
+if emaBearEnvironment
+    shortScore += 1
+
+if bullLiquiditySweep
+    longScore += 2
+
+if bearLiquiditySweep
+    shortScore += 2
+
+if bullBOS or bullMSS
+    longScore += 2
+
+if bearBOS or bearMSS
+    shortScore += 2
+
+if bullDisplacement
+    longScore += 2
+
+if bearDisplacement
+    shortScore += 2
+
+if bullFVGTouch
+    longScore += 1
+
+if bearFVGTouch
+    shortScore += 1
+
+if bullOBTouch
+    longScore += 1
+
+if bearOBTouch
+    shortScore += 1
+
+if bullOTE
+    longScore += 1
+
+if bearOTE
+    shortScore += 1
+
+if discountZone
+    longScore += 1
+
+if premiumZone
+    shortScore += 1
+
+if patternConfluenceBull
+    longScore += 1
+
+if patternConfluenceBear
+    shortScore += 1
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 22. SESSION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupSession = "15 • Sessions"
+
+asianSession = input.session("0000-0800", "Asian", group=groupSession)
+londonSession = input.session("0800-1300", "London", group=groupSession)
+nySession = input.session("1300-2100", "New York", group=groupSession)
+
+inAsian =
+     not na(time(timeframe.period, asianSession))
+
+inLondon =
+     not na(time(timeframe.period, londonSession))
+
+inNY =
+     not na(time(timeframe.period, nySession))
+
+sessionAllowed =
+     not useSession or
+     inAsian or
+     inLondon or
+     inNY
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 23. DAILY PROTECTION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupRisk = "16 • Risk Protection"
+
+maxTradesDay = input.int(5, "Maximum Trades / Day", minval=1, group=groupRisk)
+cooldownBars = input.int(3, "Cooldown Bars", minval=0, group=groupRisk)
+
+useDailyLoss = input.bool(true, "Daily Loss Protection", group=groupRisk)
+maxDailyLossPct = input.float(2.0, "Max Daily Loss %", minval=0.1, step=0.1, group=groupRisk)
+
+var float dayStartEquity = na
+var int tradesToday = 0
+var int lastTradeBar = na
+
+newDay =
+     ta.change(time("D")) != 0
+
+if newDay
+    dayStartEquity := strategy.equity
+    tradesToday := 0
+
+if na(dayStartEquity)
+    dayStartEquity := strategy.equity
+
+dailyLossPct =
+     dayStartEquity > 0 ?
+     (dayStartEquity - strategy.equity) / dayStartEquity * 100 :
+     0
+
+dailyLossOK =
+     not useDailyLoss or
+     dailyLossPct < maxDailyLossPct
+
+tradeCountOK =
+     tradesToday < maxTradesDay
+
+cooldownOK =
+     na(lastTradeBar) or
+     bar_index - lastTradeBar > cooldownBars
+
+executionAllowed =
+     dailyLossOK and
+     tradeCountOK and
+     cooldownOK and
+     sessionAllowed
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 24. ENTRY CONFIRMATION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// IMPORTANT:
+// The directional gate comes FIRST.
+//
+// A bullish setup cannot enter unless bullDirection is true.
+// A bearish setup cannot enter unless bearDirection is true.
+
+bullTrigger =
+     bullLiquiditySweep or
+     bullBOS or
+     bullDisplacement or
+     bullFVGTouch or
+     bullOBTouch or
+     bullOTE or
+     patternConfluenceBull or
+     v18BullSignal
+
+bearTrigger =
+     bearLiquiditySweep or
+     bearBOS or
+     bearDisplacement or
+     bearFVGTouch or
+     bearOBTouch or
+     bearOTE or
+     patternConfluenceBear or
+     v18BearSignal
+
+bullConfirmation =
+     bullRejection or
+     bullDisplacement or
+     bullBOS or
+     bullMSS or
+     v18BullSignal
+
+bearConfirmation =
+     bearRejection or
+     bearDisplacement or
+     bearBOS or
+     bearMSS or
+     v18BearSignal
+
+bullScoreOK =
+     not useMSSBOS and not useDisplacement ?
+     true :
+     longScore >= minimumScore
+
+bearScoreOK =
+     not useMSSBOS and not useDisplacement ?
+     true :
+     shortScore >= minimumScore
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 25. TREND SETUPS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+trendLongSetup =
+     bullDirection and
+     bullTrigger and
+     bullConfirmation and
+     bullLocationAllowed and
+     bullScoreOK
+
+trendShortSetup =
+     bearDirection and
+     bearTrigger and
+     bearConfirmation and
+     bearLocationAllowed and
+     bearScoreOK
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 26. RANGE SETUPS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+rangeLongSetup =
+     rangeLongSignal and
+     marketRegime == REG_RANGE and
+     htfNeutral
+
+rangeShortSetup =
+     rangeShortSignal and
+     marketRegime == REG_RANGE and
+     htfNeutral
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 27. FINAL SIGNAL ENGINE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+flat =
+     strategy.position_size == 0
+
+confirmedBar =
+     barstate.isconfirmed
+
+finalLong =
+     confirmedBar and
+     flat and
+     executionAllowed and
+     (
+         trendLongSetup or
+         rangeLongSetup
+     )
+
+finalShort =
+     confirmedBar and
+     flat and
+     executionAllowed and
+     (
+         trendShortSetup or
+         rangeShortSetup
+     )
+
+// Absolute safety:
+// A trend BUY can NEVER exist in bearish structure.
+// A trend SELL can NEVER exist in bullish structure.
+
+safeFinalLong =
+     finalLong and
+     (
+         rangeLongSetup or
+         bullDirection
+     ) and
+     not bearDirection
+
+safeFinalShort =
+     finalShort and
+     (
+         rangeShortSetup or
+         bearDirection
+     ) and
+     not bullDirection
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 28. TRADE MANAGEMENT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupManage = "17 • Trade Management"
+
+rr1 = input.float(1.5, "TP1 RR", minval=0.25, step=0.25, group=groupManage)
+rr2 = input.float(3.0, "TP2 RR", minval=0.5, step=0.25, group=groupManage)
+
+slATR = input.float(0.25, "SL ATR Buffer", minval=0.01, step=0.05, group=groupManage)
+
+useTP1 = input.bool(true, "Use TP1", group=groupManage)
+useTP2 = input.bool(true, "Use TP2", group=groupManage)
+useBE = input.bool(true, "Break Even", group=groupManage)
+useRunner = input.bool(true, "Runner", group=groupManage)
+
+runnerActivationR = input.float(1.0, "Runner Activation R", minval=0.25, step=0.25, group=groupManage)
+runnerTrailATR = input.float(1.5, "Runner ATR Trail", minval=0.25, step=0.25, group=groupManage)
+
+var float activeEntry = na
+var float activeSL = na
+var float activeTP1 = na
+var float activeTP2 = na
+var float activeRisk = na
+
+var int activeDirection = 0
+// 1 long
+// -1 short
+
+var bool tp1Reached = false
+var bool runnerActive = false
+
+// Range targets
+var bool activeRangeTrade = false
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 29. CREATE LONG TRADE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if safeFinalLong
+    longEntry = close
+
+    longSL =
+         rangeLongSetup ?
+         rangeLow - safeATR * slATR :
+         (not na(lastLow) ? lastLow - safeATR * slATR : close - safeATR * 2)
+
+    longRisk =
+         math.max(longEntry - longSL, safeATR * 0.25)
+
+    longTP1 =
+         longEntry + longRisk * rr1
+
+    longTP2 =
+         longEntry + longRisk * rr2
+
+    activeEntry := longEntry
+    activeSL := longSL
+    activeRisk := longRisk
+    activeTP1 := longTP1
+    activeTP2 := longTP2
+
+    activeDirection := 1
+    tp1Reached := false
+    runnerActive := false
+
+    activeRangeTrade := rangeLongSetup
+
+    strategy.entry(
+         "LONG",
+         strategy.long,
+         alert_message="V19.1 BUY | " + syminfo.ticker)
+
+    tradesToday += 1
+    lastTradeBar := bar_index
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 30. CREATE SHORT TRADE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if safeFinalShort
+    shortEntry = close
+
+    shortSL =
+         rangeShortSetup ?
+         rangeHigh + safeATR * slATR :
+         (not na(lastHigh) ? lastHigh + safeATR * slATR : close + safeATR * 2)
+
+    shortRisk =
+         math.max(shortSL - shortEntry, safeATR * 0.25)
+
+    shortTP1 =
+         shortEntry - shortRisk * rr1
+
+    shortTP2 =
+         shortEntry - shortRisk * rr2
+
+    activeEntry := shortEntry
+    activeSL := shortSL
+    activeRisk := shortRisk
+    activeTP1 := shortTP1
+    activeTP2 := shortTP2
+
+    activeDirection := -1
+    tp1Reached := false
+    runnerActive := false
+
+    activeRangeTrade := rangeShortSetup
+
+    strategy.entry(
+         "SHORT",
+         strategy.short,
+         alert_message="V19.1 SELL | " + syminfo.ticker)
+
+    tradesToday += 1
+    lastTradeBar := bar_index
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 31. TP1 DETECTION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+longTP1Touched =
+     activeDirection == 1 and
+     not tp1Reached and
+     not na(activeTP1) and
+     high >= activeTP1
+
+shortTP1Touched =
+     activeDirection == -1 and
+     not tp1Reached and
+     not na(activeTP1) and
+     low <= activeTP1
+
+if longTP1Touched
+    tp1Reached := true
+
+if shortTP1Touched
+    tp1Reached := true
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 32. BREAK EVEN
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if useBE and tp1Reached and activeDirection == 1
+    activeSL := math.max(activeSL, activeEntry)
+
+if useBE and tp1Reached and activeDirection == -1
+    activeSL := math.min(activeSL, activeEntry)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 33. RUNNER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if useRunner and activeDirection == 1 and not runnerActive and not na(activeRisk)
+    if high >= activeEntry + activeRisk * runnerActivationR
+        runnerActive := true
+
+if useRunner and activeDirection == -1 and not runnerActive and not na(activeRisk)
+    if low <= activeEntry - activeRisk * runnerActivationR
+        runnerActive := true
+
+if runnerActive and activeDirection == 1
+    newRunnerSL = close - safeATR * runnerTrailATR
+    activeSL := math.max(activeSL, newRunnerSL)
+
+if runnerActive and activeDirection == -1
+    newRunnerSL = close + safeATR * runnerTrailATR
+    activeSL := math.min(activeSL, newRunnerSL)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 34. EXIT ORDERS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if activeDirection == 1 and strategy.position_size > 0
+    if useTP1
+        strategy.exit(
+             "LONG TP1",
+             "LONG",
+             stop=activeSL,
+             limit=activeTP1,
+             qty_percent=50)
+
+    if useTP2
+        strategy.exit(
+             "LONG TP2",
+             "LONG",
+             stop=activeSL,
+             limit=activeTP2,
+             qty_percent=50)
+
+if activeDirection == -1 and strategy.position_size < 0
+    if useTP1
+        strategy.exit(
+             "SHORT TP1",
+             "SHORT",
+             stop=activeSL,
+             limit=activeTP1,
+             qty_percent=50)
+
+    if useTP2
+        strategy.exit(
+             "SHORT TP2",
+             "SHORT",
+             stop=activeSL,
+             limit=activeTP2,
+             qty_percent=50)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 35. TRADE CLOSED → CLEAR TRADE STATE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+positionJustClosed =
+     strategy.position_size == 0 and
+     strategy.position_size[1] != 0
+
+if positionJustClosed
+    activeEntry := na
+    activeSL := na
+    activeTP1 := na
+    activeTP2 := na
+    activeRisk := na
+
+    activeDirection := 0
+    tp1Reached := false
+    runnerActive := false
+    activeRangeTrade := false
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 36. FRESH CONTINUATION ANALYSIS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// TP1 is NOT allowed to inherit the previous trade's direction.
+//
+// We only generate a continuation indication AFTER TP1 and ONLY
+// according to the CURRENT confirmed market regime.
+
+var bool continuationFired = false
+
+if positionJustClosed
+    continuationFired := false
+
+freshBullAfterTP1 =
+     tp1Reached and
+     bullDirection
+
+freshBearAfterTP1 =
+     tp1Reached and
+     bearDirection
+
+continuationBuy =
+     confirmedBar and
+     freshBullAfterTP1 and
+     not continuationFired
+
+continuationSell =
+     confirmedBar and
+     freshBearAfterTP1 and
+     not continuationFired
+
+if continuationBuy or continuationSell
+    continuationFired := true
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 37. VISUALS — MINIMAL
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+groupVisual = "18 • Visuals"
+
+showEMA = input.bool(true, "Show EMA", group=groupVisual)
+showSignals = input.bool(true, "Show BUY / SELL", group=groupVisual)
+showLevels = input.bool(true, "Show Trade Levels", group=groupVisual)
+showDashboard = input.bool(true, "Show Dashboard", group=groupVisual)
+
+plot(
+     showEMA ? emaFast : na,
+     title="EMA 50",
+     linewidth=2)
+
+plot(
+     showEMA ? emaSlow : na,
+     title="EMA 200",
+     linewidth=2)
+
+plot(
+     showLevels and activeDirection != 0 ? activeSL : na,
+     title="Active SL",
+     linewidth=1,
+     style=plot.style_linebr)
+
+plot(
+     showLevels and activeDirection != 0 ? activeTP1 : na,
+     title="TP1",
+     linewidth=1,
+     style=plot.style_linebr)
+
+plot(
+     showLevels and activeDirection != 0 ? activeTP2 : na,
+     title="TP2",
+     linewidth=1,
+     style=plot.style_linebr)
+
+if showSignals and safeFinalLong
+    label.new(
+         bar_index,
+         low,
+         "BUY",
+         style=label.style_label_up,
+         textcolor=color.white)
+
+if showSignals and safeFinalShort
+    label.new(
+         bar_index,
+         high,
+         "SELL",
+         style=label.style_label_down,
+         textcolor=color.white)
+
+if showSignals and continuationBuy
+    label.new(
+         bar_index,
+         low,
+         "BUY CONT",
+         style=label.style_label_up,
+         textcolor=color.white)
+
+if showSignals and continuationSell
+    label.new(
+         bar_index,
+         high,
+         "SELL",
+         style=label.style_label_down,
+         textcolor=color.white)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 38. DASHBOARD
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var table dash = table.new(position.top_right, 2, 9)
+
+if showDashboard and barstate.islastconfirmedhistory
+    regimeText =
+         marketRegime == REG_BULL ? "BULLISH" :
+         marketRegime == REG_BEAR ? "BEARISH" :
+         marketRegime == REG_RANGE ? "RANGE" :
+         marketRegime == REG_TRANSITION ? "TRANSITION" :
+         "UNKNOWN"
+
+    directionText =
+         bullDirection ? "BUY ONLY" :
+         bearDirection ? "SELL ONLY" :
+         "NO TREND"
+
+    htfText =
+         htfBull ? "BULL" :
+         htfBear ? "BEAR" :
+         "NEUTRAL"
+
+    table.cell(dash, 0, 0, "V19.1")
+    table.cell(dash, 1, 0, "CONFIRMED")
+
+    table.cell(dash, 0, 1, "Regime")
+    table.cell(dash, 1, 1, regimeText)
+
+    table.cell(dash, 0, 2, "Structure")
+    table.cell(
+         dash,
+         1,
+         2,
+         confirmedBullStructure ? "HH + HL" :
+         confirmedBearStructure ? "LH + LL" :
+         "MIXED")
+
+    table.cell(dash, 0, 3, "HTF")
+    table.cell(dash, 1, 3, htfText)
+
+    table.cell(dash, 0, 4, "Direction")
+    table.cell(dash, 1, 4, directionText)
+
+    table.cell(dash, 0, 5, "Long Score")
+    table.cell(dash, 1, 5, str.tostring(longScore))
+
+    table.cell(dash, 0, 6, "Short Score")
+    table.cell(dash, 1, 6, str.tostring(shortScore))
+
+    table.cell(dash, 0, 7, "Trades Today")
+    table.cell(dash, 1, 7, str.tostring(tradesToday))
+
+    table.cell(dash, 0, 8, "Daily Loss")
+    table.cell(dash, 1, 8, str.tostring(dailyLossPct, "#.##") + "%")
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 39. ALERTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// alertcondition() intentionally NOT used.
+// Strategy alerts should use alert() or order-fill alerts.
+
+if safeFinalLong
+    alert(
+         "V19.1 BUY | " +
+         syminfo.ticker +
+         " | Regime=BULLISH | Structure=HH+HL",
+         alert.freq_once_per_bar_close)
+
+if safeFinalShort
+    alert(
+         "V19.1 SELL | " +
+         syminfo.ticker +
+         " | Regime=BEARISH | Structure=LH+LL",
+         alert.freq_once_per_bar_close)
+
+if continuationBuy
+    alert(
+         "V19.1 BUY CONT | " +
+         syminfo.ticker +
+         " | Fresh bullish analysis",
+         alert.freq_once_per_bar_close)
+
+if continuationSell
+    alert(
+         "V19.1 SELL | " +
+         syminfo.ticker +
+         " | Fresh bearish analysis",
+         alert.freq_once_per_bar_close)
