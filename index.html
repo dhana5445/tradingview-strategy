@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Alpha EMA V19.1 — a structured market-analysis framework for confirmed trend direction, confluence, entries, and risk management.">
+  <title>Alpha EMA | Confirmed Structure Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Alpha EMA home">
+      <span class="brand-mark">α</span><span>ALPHA <b>EMA</b><small>STRUCTURE ENGINE / V19.1</small></span>
+    </a>
+    <nav class="nav">
+      <a href="#strategy">Strategy</a><a href="#engine">Engine</a><a href="#risk">Risk controls</a><a href="#settings">Settings</a>
+    </nav>
+    <a class="nav-cta" href="#disclaimer">Read disclaimer <span>↗</span></a>
+    <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+  </header>
+
+  <main id="home">
+    <section class="hero section-wrap">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="pulse"></span> SYSTEMATIC MARKET ANALYSIS <span class="eyebrow-line"></span> V19.1</div>
+        <h1>Direction first.<br><span>Entry second.</span></h1>
+        <p class="hero-lede">A structure-led trading framework designed to evaluate market direction before considering a setup. Confluence supports the decision — it never overrides the trend filter.</p>
+        <div class="hero-actions"><a class="button button-primary" href="#strategy">Explore the framework <span>↓</span></a><a class="button button-ghost" href="#engine">View engine modules <span>↗</span></a></div>
+        <div class="hero-note"><span class="note-dot"></span> Educational strategy documentation · Not a signal service</div>
+      </div>
+      <div class="hero-visual">
+        <div class="chart-window">
+          <div class="chart-head"><div><span class="live-dot"></span> STRUCTURE OVERVIEW</div><span class="chart-symbol">EUR / USD <b>·</b> DEMO</span></div>
+          <div class="chart-legend"><span><i class="legend-ema"></i> EMA 50</span><span><i class="legend-slow"></i> EMA 200</span><span><i class="legend-bull"></i> Bullish structure</span></div>
+          <svg class="chart-svg" viewBox="0 0 620 310" role="img" aria-label="Illustrative price chart with moving averages and bullish structure">
+            <defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#49e0b0" stop-opacity=".19"/><stop offset="100%" stop-color="#49e0b0" stop-opacity="0"/></linearGradient></defs>
+            <g class="grid-lines"><path d="M0 40H620 M0 90H620 M0 140H620 M0 190H620 M0 240H620 M0 290H620"/><path d="M70 0V310 M150 0V310 M230 0V310 M310 0V310 M390 0V310 M470 0V310 M550 0V310"/></g>
+            <path class="area-fill" d="M0 250 L25 238 L48 252 L70 210 L94 226 L116 184 L138 204 L163 158 L186 177 L208 143 L232 163 L254 117 L277 137 L300 99 L323 123 L346 82 L370 107 L392 65 L414 85 L437 57 L458 74 L482 44 L506 61 L530 30 L552 51 L576 22 L600 37 L620 12 L620 310 L0 310Z" fill="url(#area)"/>
+            <polyline class="ema-slow" points="0,265 35,260 70,256 105,250 140,244 175,236 210,227 245,217 280,207 315,197 350,184 385,171 420,158 455,143 490,128 525,112 560,98 590,82 620,69"/>
+            <polyline class="ema-fast" points="0,275 25,265 48,270 70,230 94,242 116,207 138,218 163,177 186,188 208,159 232,171 254,133 277,145 300,111 323,132 346,94 370,116 392,78 414,93 437,66 458,82 482,51 506,69 530,37 552,55 576,28 600,42 620,18"/>
+            <polyline class="price-line" points="0,250 25,238 48,252 70,210 94,226 116,184 138,204 163,158 186,177 208,143 232,163 254,117 277,137 300,99 323,123 346,82 370,107 392,65 414,85 437,57 458,74 482,44 506,61 530,30 552,51 576,22 600,37 620,12"/>
+            <g class="swing-labels"><text x="66" y="197">HL</text><text x="156" y="145">HH</text><text x="246" y="105">HL</text><text x="338" y="70">HH</text><text x="428" y="44">HL</text><text x="520" y="18">HH</text></g>
+            <g class="signal"><circle cx="346" cy="82" r="5"/><path d="M346 82 L346 48"/><rect x="319" y="25" width="55" height="22" rx="5"/><text x="346" y="40" text-anchor="middle">BUY</text></g>
+            <text class="axis-label" x="8" y="304">ILLUSTRATIVE CHART · NOT LIVE MARKET DATA</text>
+          </svg>
+          <div class="chart-foot"><span><i class="foot-dot green"></i> HH + HL confirmed</span><span>Trend filter active <b>↗</b></span></div>
+        </div>
+        <div class="float-card float-top"><span class="float-icon">↗</span><div><small>MARKET REGIME</small><b>BULLISH</b></div></div>
+        <div class="float-card float-bottom"><span class="float-icon green-icon">✓</span><div><small>DIRECTION GATE</small><b>BUY ONLY</b></div></div>
+      </div>
+      <div class="hero-index"><span>01</span><span class="index-line"></span><span>ANALYZE · CONFIRM · EXECUTE</span></div>
+    </section>
+
+    <section class="metrics section-wrap" aria-label="Strategy highlights">
+      <div class="metric"><span class="metric-number">50 / 200</span><span class="metric-label">EMA trend filter</span></div>
+      <div class="metric"><span class="metric-number">HH + HL</span><span class="metric-label">Bullish structure</span></div>
+      <div class="metric"><span class="metric-number">LH + LL</span><span class="metric-label">Bearish structure</span></div>
+      <div class="metric"><span class="metric-number">1.5R / 3R</span><span class="metric-label">Default TP targets</span></div>
+    </section>
+
+    <section id="strategy" class="content-section section-wrap">
+      <div class="section-heading"><div><div class="eyebrow">01 / THE FRAMEWORK</div><h2>One system. <span>Clear priorities.</span></h2></div><p>Every setup passes through the same hierarchy. A pattern, FVG, or order block is context — not permission to trade against confirmed direction.</p></div>
+      <div class="priority-grid">
+        <article class="priority-card featured"><div class="card-number">01</div><div class="card-icon">⌁</div><h3>Market structure</h3><p>Identify confirmed swing highs and lows before deciding whether the market is bullish, bearish, transitioning, or ranging.</p><div class="tag-row"><span>HH + HL</span><span>LH + LL</span></div></article>
+        <article class="priority-card"><div class="card-number">02</div><div class="card-icon">〽</div><h3>Direction filters</h3><p>EMA 50/200 and the previous closed higher-timeframe candle can act as hard filters when enabled.</p><div class="tag-row"><span>EMA</span><span>HTF</span></div></article>
+        <article class="priority-card"><div class="card-number">03</div><div class="card-icon">◎</div><h3>Setup confluence</h3><p>Liquidity sweeps, displacement, BOS/MSS, FVG, order blocks, OTE, and patterns add context to a valid direction.</p><div class="tag-row"><span>FVG / OB</span><span>BOS / MSS</span></div></article>
+        <article class="priority-card"><div class="card-number">04</div><div class="card-icon">↗</div><h3>Execution & risk</h3><p>Signals are checked on a confirmed bar, with trade limits, a daily loss guard, stop levels, and target management.</p><div class="tag-row"><span>SL / TP</span><span>Risk limits</span></div></article>
+      </div>
+    </section>
+
+    <section id="engine" class="engine-section">
+      <div class="section-wrap">
+        <div class="section-heading"><div><div class="eyebrow">02 / THE ENGINE</div><h2>Built around <span>confirmation.</span></h2></div><p>The V19.1 Pine Script contains modular checks that can be enabled or disabled in TradingView.</p></div>
+        <div class="engine-layout">
+          <div class="engine-list">
+            <button class="engine-tab active" data-panel="direction"><span class="tab-index">01</span><span><b>Direction gate</b><small>Structure + EMA + HTF</small></span><span class="tab-arrow">↗</span></button>
+            <button class="engine-tab" data-panel="liquidity"><span class="tab-index">02</span><span><b>Liquidity & displacement</b><small>Sweeps and strong candles</small></span><span class="tab-arrow">↗</span></button>
+            <button class="engine-tab" data-panel="locations"><span class="tab-index">03</span><span><b>Entry locations</b><small>FVG, order block, OTE, P/D</small></span><span class="tab-arrow">↗</span></button>
+            <button class="engine-tab" data-panel="execution"><span class="tab-index">04</span><span><b>Execution controls</b><small>Confirmed bar + trade rules</small></span><span class="tab-arrow">↗</span></button>
+          </div>
+          <div class="engine-panel" id="enginePanel">
+            <div class="panel-kicker"><span class="live-dot"></span> MODULE 01 <span>· CORE LOGIC</span></div>
+            <h3>Direction is a hard rule.</h3>
+            <p>The engine first evaluates the confirmed swing structure. With filters enabled, the higher timeframe and EMA environment must agree before a trend setup can qualify.</p>
+            <div class="rule-box"><span class="rule-symbol">↑</span><div><b>BULLISH</b><p>Confirmed HH + HL, price above EMA 50, EMA 50 above EMA 200, and bullish higher-timeframe conditions when enabled.</p></div></div>
+            <div class="rule-box"><span class="rule-symbol down">↓</span><div><b>BEARISH</b><p>Confirmed LH + LL, price below EMA 50, EMA 50 below EMA 200, and bearish higher-timeframe conditions when enabled.</p></div></div>
+            <div class="panel-foot"><span>NO DIRECTION = NO TREND ENTRY</span><span>01 / 04</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="risk" class="content-section section-wrap">
+      <div class="section-heading"><div><div class="eyebrow">03 / RISK MANAGEMENT</div><h2>Plan the exit <span>before entry.</span></h2></div><p>The script provides configurable stop and target logic. These settings are starting defaults, not a promise of performance.</p></div>
+      <div class="risk-layout">
+        <div class="risk-main">
+          <div class="risk-top"><span class="small-label">DEFAULT REWARD-TO-RISK SETTINGS</span><span class="status-pill">CONFIGURABLE</span></div>
+          <div class="rr-visual"><div class="rr-row"><span>Stop loss</span><div class="rr-track"><span class="rr-loss"></span></div><b>−1R</b></div><div class="rr-row"><span>Take profit 1</span><div class="rr-track"><span class="rr-tp1"></span></div><b>+1.5R</b></div><div class="rr-row"><span>Take profit 2</span><div class="rr-track"><span class="rr-tp2"></span></div><b>+3R</b></div></div>
+          <div class="risk-note"><span>ⓘ</span><p>By default, TP1 and TP2 each target 50% of position size. Break-even and ATR-based runner management are configurable in the source strategy.</p></div>
+        </div>
+        <div class="risk-side">
+          <article class="mini-risk"><span class="mini-icon">⌁</span><div><h3>Daily loss guard</h3><p>Default maximum daily loss: 2% of day-start equity, when enabled.</p></div></article>
+          <article class="mini-risk"><span class="mini-icon">#</span><div><h3>Trade frequency</h3><p>Default maximum 5 trades per day, with a 3-bar cooldown.</p></div></article>
+          <article class="mini-risk"><span class="mini-icon">◷</span><div><h3>Session filter</h3><p>Optional Asian, London, and New York session windows.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="settings" class="settings-section">
+      <div class="section-wrap">
+        <div class="section-heading"><div><div class="eyebrow">04 / CONFIGURATION</div><h2>Explore the <span>defaults.</span></h2></div><p>Use this quick reference to understand selected parameters from the provided V19.1 script.</p></div>
+        <div class="settings-table-wrap">
+          <table class="settings-table"><thead><tr><th>Setting</th><th>Default</th><th>Purpose</th></tr></thead><tbody>
+            <tr><td>Fast EMA</td><td><code>50</code></td><td>Shorter trend average</td></tr>
+            <tr><td>Slow EMA</td><td><code>200</code></td><td>Longer trend average</td></tr>
+            <tr><td>Higher timeframe</td><td><code>60 min</code></td><td>Uses previous closed HTF candle</td></tr>
+            <tr><td>Confirmed pivot length</td><td><code>3</code></td><td>Confirms swing points</td></tr>
+            <tr><td>Minimum confluence score</td><td><code>5</code></td><td>Minimum score for trend setups when score gate applies</td></tr>
+            <tr><td>TP1 / TP2</td><td><code>1.5R / 3R</code></td><td>Default reward-to-risk targets</td></tr>
+            <tr><td>Maximum trades / day</td><td><code>5</code></td><td>Daily trade cap</td></tr>
+            <tr><td>Maximum daily loss</td><td><code>2%</code></td><td>Daily loss guard when enabled</td></tr>
+          </tbody></table>
+        </div>
+        <div class="settings-callout"><span class="callout-icon">✳</span><div><b>Designed to be configurable.</b><p>Settings can change strategy behavior. Test parameter changes with historical data and forward testing before considering live use.</p></div></div>
+      </div>
+    </section>
+
+    <section class="workflow-section section-wrap">
+      <div class="section-heading"><div><div class="eyebrow">05 / WORKFLOW</div><h2>From chart to <span>decision.</span></h2></div><p>A repeatable checklist helps keep analysis consistent. A valid setup can still lose money.</p></div>
+      <div class="workflow">
+        <div class="workflow-step"><span>01</span><div class="workflow-line"></div><h3>Classify</h3><p>Check confirmed structure and current regime.</p></div>
+        <div class="workflow-step"><span>02</span><div class="workflow-line"></div><h3>Filter</h3><p>Check EMA and higher-timeframe agreement.</p></div>
+        <div class="workflow-step"><span>03</span><div class="workflow-line"></div><h3>Confirm</h3><p>Evaluate trigger, location, and confluence.</p></div>
+        <div class="workflow-step"><span>04</span><div class="workflow-line"></div><h3>Protect</h3><p>Review stop, targets, and daily risk limits.</p></div>
+      </div>
+    </section>
+
+    <section id="disclaimer" class="disclaimer section-wrap">
+      <div class="disclaimer-mark">!</div><div><div class="eyebrow">IMPORTANT NOTICE</div><h2>Tools support decisions.<br><span>They don't remove risk.</span></h2><p>This website documents the logic and default settings described in the supplied Pine Script. It does not connect to TradingView, display live prices, place trades, or independently verify performance. Trading forex and leveraged products involves substantial risk. Backtest results can differ from live execution due to costs, slippage, data quality, and market conditions. This is educational information, not financial advice.</p></div>
+    </section>
+  </main>
+
+  <footer class="footer section-wrap"><a class="brand footer-brand" href="#home"><span class="brand-mark">α</span><span>ALPHA <b>EMA</b><small>STRUCTURE ENGINE / V19.1</small></span></a><span>STRUCTURE FIRST. PROCESS ALWAYS.</span><a href="#home">Back to top ↑</a></footer>
+  <script src="script.js"></script>
+</body>
+</html>
